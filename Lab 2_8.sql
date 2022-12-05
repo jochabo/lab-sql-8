@@ -131,19 +131,35 @@ SELECT * FROM rental; -- customer_id, rental_id, inventory_id
 SELECT * FROM inventory; -- inventory_id, film_id
 SELECT * FROM film; -- film_id
 
-SELECT
-    customer_id, film_id, title, COUNT(*) AS count
+DROP TABLE IF EXISTS t1;
+CREATE TEMPORARY TABLE t1 AS (
+SELECT i.film_id, r.rental_id, r.customer_id, r.inventory_id
+FROM rental r
+JOIN inventory i
+USING(inventory_id));
+
+SELECT * FROM t1;
+
+DROP TABLE IF EXISTS t2;
+CREATE TEMPORARY TABLE t2 AS (
+SELECT i.film_id, r.rental_id, r.customer_id, r.inventory_id
+FROM rental r
+JOIN inventory i
+USING(inventory_id));
+
+SELECT * FROM t2;
+
+SELECT 
+    COUNT(t1.film_id),
+    t1.customer_id,
+    t2.customer_id
 FROM
-    sakila.customer c
+    t1
         JOIN
-    sakila.rental r USING (customer_id)
-        JOIN
-    sakila.inventory i USING (inventory_id)
-        JOIN
-    sakila.film USING (film_id)
-GROUP BY customer_id , film_id
-HAVING count > '3' -- we don't get any, because the maxmal count of pair is 3.
-ORDER BY count DESC;
+    t2 ON t1.inventory_id = t2.inventory_id
+        AND t1.customer_id > t2.customer_id
+GROUP BY t1.customer_id , t2.customer_id
+HAVING COUNT(t1.film_id) > 3;
 
 -- 9) For each film, list actor that has acted in more films.
 
@@ -151,26 +167,46 @@ SELECT * FROM film; -- film_id
 SELECT * FROM film_actor; -- film_id, actor_id
 SELECT * FROM actor; -- actor_id
 
-SELECT film_id, title, actor_id, first_name, last_name, COUNT(distinct film_id, actor_id) AS number_of_films
-FROM
-    sakila.film f
-        JOIN
-    sakila.film_actor fa USING (film_id)
-        JOIN
-    sakila.actor a USING (actor_id)
-    GROUP BY film_id, title, actor_id, first_name, last_name
-    ORDER BY film_id DESC;
-       
--- from lab 2_7
--- 3) Which actor has appeared in the most films?
+-- --------- CREATE TEMPORARY TABLE
+DROP TABLE IF EXISTS numbers_of_films_for_actors;
+
+CREATE TEMPORARY TABLE numbers_of_films_for_actors
 SELECT 
     fa.actor_id,
     COUNT(DISTINCT film_id) AS numbers_of_films,
     a.first_name,
-    a.last_name
+    a.last_name -- doesn't work as expected: , ROW_NUMBER() OVER() AS 'row'
 FROM
     sakila.film_actor fa
         JOIN
     sakila.actor a USING (actor_id)
 GROUP BY fa.actor_id , a.first_name , a.last_name
 ORDER BY numbers_of_films DESC;
+
+-- add column with "rank" to temp table
+SELECT *, ROW_NUMBER() OVER() AS 'rank' from numbers_of_films_for_actors;
+
+-- JOIN film, film_actor and actor
+SELECT film_id, title, actor_id, first_name, last_name 
+FROM
+    sakila.film f
+        JOIN
+    sakila.film_actor fa USING (film_id)
+        JOIN 
+        sakila.actor a USING (actor_id) WHERE actor_id = (SELECT actor_id WHERE 
+        ORDER BY film_id ASC;
+        
+        
+        WHERE actor_id = (SELECT actor_id FROM
+                    actor
+                WHERE
+                    actor_id = (SELECT 
+                            actor_id
+                        FROM
+                            (SELECT 
+                                actor_id, COUNT(DISTINCT film_id) AS count_of_films
+                            FROM
+                                film_actor
+                            GROUP BY actor_id
+                            ORDER BY count_of_films DESC
+                            LIMIT 1) sub1)) ORDER BY film_id ASC;
