@@ -150,12 +150,12 @@ USING(inventory_id));
 SELECT * FROM t2;
 
 SELECT 
-    COUNT(t1.film_id),
+    COUNT(t1.film_id) AS Number_of_times_rented,
     t1.customer_id,
     t2.customer_id
 FROM
     t1
-        JOIN
+       JOIN
     t2 ON t1.inventory_id = t2.inventory_id
         AND t1.customer_id > t2.customer_id
 GROUP BY t1.customer_id , t2.customer_id
@@ -167,46 +167,23 @@ SELECT * FROM film; -- film_id
 SELECT * FROM film_actor; -- film_id, actor_id
 SELECT * FROM actor; -- actor_id
 
--- --------- CREATE TEMPORARY TABLE
-DROP TABLE IF EXISTS numbers_of_films_for_actors;
+SET sql_mode=(SELECT REPLACE(@@sql_mode, 'ONLY_FULL_GROUP_BY',''));
 
-CREATE TEMPORARY TABLE numbers_of_films_for_actors
-SELECT 
-    fa.actor_id,
-    COUNT(DISTINCT film_id) AS numbers_of_films,
-    a.first_name,
-    a.last_name -- doesn't work as expected: , ROW_NUMBER() OVER() AS 'row'
-FROM
-    sakila.film_actor fa
-        JOIN
-    sakila.actor a USING (actor_id)
-GROUP BY fa.actor_id , a.first_name , a.last_name
-ORDER BY numbers_of_films DESC;
-
--- add column with "rank" to temp table
-SELECT *, ROW_NUMBER() OVER() AS 'rank' from numbers_of_films_for_actors;
-
--- JOIN film, film_actor and actor
-SELECT film_id, title, actor_id, first_name, last_name 
-FROM
-    sakila.film f
-        JOIN
-    sakila.film_actor fa USING (film_id)
-        JOIN 
-        sakila.actor a USING (actor_id) WHERE actor_id = (SELECT actor_id WHERE 
-        ORDER BY film_id ASC;
-        
-        
-        WHERE actor_id = (SELECT actor_id FROM
-                    actor
-                WHERE
-                    actor_id = (SELECT 
-                            actor_id
-                        FROM
-                            (SELECT 
-                                actor_id, COUNT(DISTINCT film_id) AS count_of_films
-                            FROM
-                                film_actor
-                            GROUP BY actor_id
-                            ORDER BY count_of_films DESC
-                            LIMIT 1) sub1)) ORDER BY film_id ASC;
+SELECT film.title, first_name, last_name, max(tempt1.numbers_of_films) as '# of acted films'
+FROM (-- table with count of films per actor/actress
+SELECT actor_id, COUNT(film_id) as numbers_of_films
+FROM film_actor
+GROUP BY actor_id
+ORDER BY COUNT(film_id)
+) tempt1
+JOIN ( -- Actors grouped per film_id
+SELECT actor_id, film_id
+FROM film_actor
+) tempt2
+USING (actor_id)
+JOIN film
+ON film.film_id = tempt2.film_id
+JOIN actor
+ON actor.actor_id=tempt1.actor_id
+GROUP BY tempt2.film_id
+ORDER BY tempt2.film_id ASC;
